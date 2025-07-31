@@ -1,0 +1,153 @@
+// src/App.jsx
+import React, { useState } from "react";
+import "./App.css";
+
+const MATERIAL_COSTS = {
+  plywood: 110, // ₹ per sq.ft
+  laminate: 40, // ₹ per sq.ft
+  labour: 100, // ₹ per sq.ft
+  drawer: 600, // per unit
+  hingeSet: 100, // per shutter
+  slidingMechanism: 1200, // per shutter (optional)
+  handle: 100, // per handle
+  transport: 1000, // flat
+};
+
+function App() {
+  const [inputs, setInputs] = useState({
+    height: "",
+    width: "",
+    depth: "",
+    shutters: 2,
+    drawers: 2,
+    sliding: false,
+  });
+
+  const [result, setResult] = useState(null);
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setInputs({
+      ...inputs,
+      [name]: type === "checkbox" ? checked : parseFloat(value),
+    });
+  };
+
+  const calculate = () => {
+    const { height, width, depth, shutters, drawers, sliding } = inputs;
+    if (!height || !width || !depth) return alert("Enter all dimensions");
+
+    const outerSurfaceArea = 2 * (height * width + height * depth); // front+back, left+right
+    const internalPartition = height * depth; // assume 1 partition
+    const shutterArea = shutters * height * (width / shutters);
+    const totalArea = outerSurfaceArea + internalPartition + shutterArea;
+
+    const plywoodCost = totalArea * MATERIAL_COSTS.plywood;
+    const laminateCost = totalArea * MATERIAL_COSTS.laminate;
+    const labourCost = totalArea * MATERIAL_COSTS.labour;
+
+    const drawerCost = drawers * MATERIAL_COSTS.drawer;
+    const hingeCost = shutters * MATERIAL_COSTS.hingeSet;
+    const slidingCost = sliding
+      ? shutters * MATERIAL_COSTS.slidingMechanism
+      : 0;
+    const handleCost = shutters * MATERIAL_COSTS.handle;
+    const transport = MATERIAL_COSTS.transport;
+
+    const total =
+      plywoodCost +
+      laminateCost +
+      labourCost +
+      drawerCost +
+      hingeCost +
+      slidingCost +
+      handleCost +
+      transport;
+
+    setResult({
+      totalArea: totalArea.toFixed(2),
+      plywoodCost,
+      laminateCost,
+      labourCost,
+      drawerCost,
+      hingeCost,
+      slidingCost,
+      handleCost,
+      transport,
+      total,
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-3xl mx-auto bg-white shadow-md rounded-lg p-6">
+        <h1 className="text-2xl font-bold mb-4">Wardrobe Cost Calculator</h1>
+        <div className="grid grid-cols-2 gap-4">
+          {[
+            { label: "Height (ft)", name: "height" },
+            { label: "Width (ft)", name: "width" },
+            { label: "Depth (ft)", name: "depth" },
+            { label: "No. of Shutters", name: "shutters" },
+            { label: "No. of Drawers", name: "drawers" },
+          ].map(({ label, name }) => (
+            <div key={name}>
+              <label className="block text-gray-700 font-medium mb-1">
+                {label}
+              </label>
+              <input
+                type="number"
+                name={name}
+                value={inputs[name] || ""}
+                onChange={handleChange}
+                className="w-full border rounded px-3 py-2"
+                min={0}
+              />
+            </div>
+          ))}
+          <div className="col-span-2">
+            <label className="inline-flex items-center">
+              <input
+                type="checkbox"
+                name="sliding"
+                checked={inputs.sliding}
+                onChange={handleChange}
+                className="mr-2"
+              />
+              Sliding Doors
+            </label>
+          </div>
+        </div>
+        <button
+          onClick={calculate}
+          className="mt-4 bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+        >
+          Calculate Cost
+        </button>
+
+        {result && (
+          <div className="mt-6 bg-gray-50 p-4 rounded shadow">
+            <h2 className="text-xl font-semibold mb-3">Estimate Summary</h2>
+            <ul className="space-y-1 text-sm">
+              <li>Total Area: {result.totalArea} sq.ft</li>
+              <li>Plywood Cost: ₹{result.plywoodCost.toFixed(0)}</li>
+              <li>Laminate Cost: ₹{result.laminateCost.toFixed(0)}</li>
+              <li>Labour Cost: ₹{result.labourCost.toFixed(0)}</li>
+              <li>Drawer Cost: ₹{result.drawerCost}</li>
+              <li>Hinges Cost: ₹{result.hingeCost}</li>
+              {inputs.sliding && (
+                <li>Sliding Mechanism: ₹{result.slidingCost}</li>
+              )}
+              <li>Handles: ₹{result.handleCost}</li>
+              <li>Transport: ₹{result.transport}</li>
+              <li className="font-bold">
+                Total Estimate: ₹{result.total.toFixed(0)}
+              </li>
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default App;
