@@ -400,6 +400,7 @@ function App() {
 
   // Customizable Cost States (initialized with defaults)
   const [markupPercentage, setMarkupPercentage] = useState(20);
+  const [labourPercentage, setLabourPercentage] = useState(70); // New state for labour percentage
   const [customMaterialCosts, setCustomMaterialCosts] = useState({
     ...DEFAULT_MATERIAL_COSTS_PER_SQFT,
   });
@@ -466,6 +467,7 @@ function App() {
 
   // --- LOCAL INPUT STATES FOR RATES TAB ---
   const [markupInput, setMarkupInput] = useState("");
+  const [labourPercentageInput, setLabourPercentageInput] = useState(""); // New state for labour percentage input
   const [edgeBandingInput, setEdgeBandingInput] = useState("");
   const [lightingCostInput, setLightingCostInput] = useState("");
   const [glassDoorCostInput, setGlassDoorCostInput] = useState("");
@@ -487,6 +489,7 @@ function App() {
       );
       if (savedData) {
         setMarkupPercentage(savedData.markupPercentage);
+        setLabourPercentage(savedData.labourPercentage || 70); // Load new state, with a default fallback
         setCustomMaterialCosts(savedData.customMaterialCosts);
         setCustomEdgeBandingCost(savedData.customEdgeBandingCost);
         setCustomHardwareOptions(savedData.customHardwareOptions);
@@ -507,6 +510,7 @@ function App() {
   useEffect(() => {
     // Sync Markup
     setMarkupInput(markupPercentage.toString());
+    setLabourPercentageInput(labourPercentage.toString()); // Sync new state
     setEdgeBandingInput(
       (customEdgeBandingCost * CURRENCY_RATES[currency]).toFixed(2)
     );
@@ -569,6 +573,7 @@ function App() {
     setUpholsteryCostsInput(newUpholsteryCosts);
   }, [
     markupPercentage,
+    labourPercentage, // Add new state to dependency array
     customMaterialCosts,
     customEdgeBandingCost,
     customHardwareOptions,
@@ -586,6 +591,7 @@ function App() {
   useEffect(() => {
     const ratesToSave = {
       markupPercentage,
+      labourPercentage, // Save new state
       customMaterialCosts,
       customEdgeBandingCost,
       customHardwareOptions,
@@ -607,6 +613,7 @@ function App() {
     }
   }, [
     markupPercentage,
+    labourPercentage, // Add new state to dependency array
     customMaterialCosts,
     customEdgeBandingCost,
     customHardwareOptions,
@@ -626,6 +633,10 @@ function App() {
       newErrors.markupPercentage = "Cannot be negative.";
     if (markupPercentage > 100)
       newErrors.markupPercentage = "Cannot exceed 100%.";
+    if (labourPercentage < 0)
+      newErrors.labourPercentage = "Cannot be negative.";
+    if (labourPercentage > 100)
+      newErrors.labourPercentage = "Cannot exceed 100%.";
 
     // Validate custom material costs
     Object.keys(customMaterialCosts).forEach((key) => {
@@ -760,6 +771,7 @@ function App() {
     drawerHeight,
     drawerDepth,
     markupPercentage,
+    labourPercentage, // Add new state to dependency array
     hingeType,
     drawerSlideType,
     handleType,
@@ -937,7 +949,7 @@ function App() {
       calculatedEdgeBandingCost +
       calculatedHardwareCost +
       calculatedAdditionalFeaturesCost;
-    const calculatedLaborCost = baseCost * 0.7;
+    const calculatedLaborCost = baseCost * (labourPercentage / 100);
 
     const subTotalCost = baseCost + calculatedLaborCost;
 
@@ -1578,6 +1590,39 @@ function App() {
                   {errors.markupPercentage && (
                     <p className="text-red-500 text-xs mt-1">
                       {errors.markupPercentage}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label
+                    htmlFor="labourPercentage"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Labor Cost Percentage (%)
+                  </label>
+                  <input
+                    type="number"
+                    id="labourPercentage"
+                    value={labourPercentageInput}
+                    onChange={(e) => setLabourPercentageInput(e.target.value)}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setLabourPercentage(isNaN(val) || val < 0 ? 0 : val);
+                      setLabourPercentageInput(
+                        isNaN(val) ? "0" : val.toString()
+                      );
+                    }}
+                    className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
+                      errors.labourPercentage
+                        ? "border-red-500"
+                        : "border-gray-300"
+                    }`}
+                    min="0"
+                    max="100"
+                  />
+                  {errors.labourPercentage && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.labourPercentage}
                     </p>
                   )}
                 </div>
@@ -2486,49 +2531,12 @@ function App() {
                       .join(" ")}
                   </p>
                   <p>
-                    <strong>Labor Cost Calculation:</strong> 70% of total
-                    material cost.
+                    <strong>Labor Cost Calculation:</strong> {labourPercentage}%
+                    of total material cost.
                   </p>
                   <p>
                     <strong>Custom Markup:</strong> {markupPercentage}%
                   </p>
-
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <h3 className="text-xl font-medium text-gray-700 mb-2 flex items-center">
-                      <Hammer className="w-5 h-5 mr-2" /> Assumptions & Notes:
-                    </h3>
-                    <ul className="list-disc list-inside text-sm space-y-1">
-                      <li>
-                        All base costs (materials, hardware, additional
-                        features) are defined in US Dollars ($).
-                      </li>
-                      <li>
-                        The final display currency is based on the selected
-                        exchange rate.
-                      </li>
-                      <li>
-                        Material thickness costs are applied based on component:
-                        18mm for main panels/doors/drawer fronts, 12mm for
-                        shelves/drawer boxes, 6mm for back panel.
-                      </li>
-                      <li>
-                        Drawer dimensions ({drawerHeight}" H x {drawerDepth}" D)
-                        are estimates for material calculation.
-                      </li>
-                      <li>
-                        Costs do not include delivery, installation, or any
-                        custom finishes unless specified.
-                      </li>
-                      <li>
-                        All dimensions are in inches for input, converted to
-                        feet for calculations.
-                      </li>
-                      <li>
-                        Markup percentage is applied to the subtotal (materials
-                        + hardware + labor + additional features).
-                      </li>
-                    </ul>
-                  </div>
                 </div>
               </section>
             )}
