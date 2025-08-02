@@ -416,6 +416,70 @@ function App() {
   const [showDetails, setShowDetails] = useState(false);
   const [errors, setErrors] = useState({});
 
+  // --- Load state from localStorage on initial mount ---
+  useEffect(() => {
+    try {
+      const savedData = JSON.parse(
+        localStorage.getItem("furnitureCalculatorRates")
+      );
+      if (savedData) {
+        setLaborHourlyRate(savedData.laborHourlyRate);
+        setMarkupPercentage(savedData.markupPercentage);
+        setCustomMaterialCosts(savedData.customMaterialCosts);
+        setCustomEdgeBandingCost(savedData.customEdgeBandingCost);
+        setCustomHardwareOptions(savedData.customHardwareOptions);
+        setCustomLightingCostPerFt(savedData.customLightingCostPerFt);
+        setCustomGlassDoorAddCost(savedData.customGlassDoorAddCost);
+        setCustomFinishCosts(savedData.customFinishCosts);
+        setCustomSofaUpholsteryCosts(savedData.customSofaUpholsteryCosts);
+        setCustomSofaCushionCost(savedData.customSofaCushionCost);
+        setCustomSofaLegSetCost(savedData.customSofaLegSetCost);
+        setCustomSofaArmCostPerPair(savedData.customSofaArmCostPerPair);
+      }
+    } catch (e) {
+      console.error("Failed to load state from localStorage:", e);
+    }
+  }, []);
+
+  // --- Save state to localStorage whenever custom rates change ---
+  useEffect(() => {
+    const ratesToSave = {
+      laborHourlyRate,
+      markupPercentage,
+      customMaterialCosts,
+      customEdgeBandingCost,
+      customHardwareOptions,
+      customLightingCostPerFt,
+      customGlassDoorAddCost,
+      customFinishCosts,
+      customSofaUpholsteryCosts,
+      customSofaCushionCost,
+      customSofaLegSetCost,
+      customSofaArmCostPerPair,
+    };
+    try {
+      localStorage.setItem(
+        "furnitureCalculatorRates",
+        JSON.stringify(ratesToSave)
+      );
+    } catch (e) {
+      console.error("Failed to save state to localStorage:", e);
+    }
+  }, [
+    laborHourlyRate,
+    markupPercentage,
+    customMaterialCosts,
+    customEdgeBandingCost,
+    customHardwareOptions,
+    customLightingCostPerFt,
+    customGlassDoorAddCost,
+    customFinishCosts,
+    customSofaUpholsteryCosts,
+    customSofaCushionCost,
+    customSofaLegSetCost,
+    customSofaArmCostPerPair,
+  ]);
+
   // Validation function
   const validateInputs = () => {
     const newErrors = {};
@@ -433,11 +497,18 @@ function App() {
     if (customEdgeBandingCost < 0)
       newErrors.customEdgeBandingCost = "Cannot be negative.";
     Object.keys(customHardwareOptions).forEach((typeKey) => {
-      Object.keys(customHardwareOptions[typeKey]).forEach((itemKey) => {
-        if (customHardwareOptions[typeKey][itemKey] < 0)
-          newErrors[`customHardwareOptions_${typeKey}_${itemKey}`] =
-            "Cannot be negative.";
-      });
+      if (
+        typeof customHardwareOptions[typeKey] === "number" &&
+        customHardwareOptions[typeKey] < 0
+      ) {
+        newErrors[`customHardwareOptions_${typeKey}`] = "Cannot be negative.";
+      } else if (typeof customHardwareOptions[typeKey] === "object") {
+        Object.keys(customHardwareOptions[typeKey]).forEach((itemKey) => {
+          if (customHardwareOptions[typeKey][itemKey] < 0)
+            newErrors[`customHardwareOptions_${typeKey}_${itemKey}`] =
+              "Cannot be negative.";
+        });
+      }
     });
     if (customLightingCostPerFt < 0)
       newErrors.customLightingCostPerFt = "Cannot be negative.";
@@ -784,13 +855,21 @@ function App() {
         type={type}
         id={id}
         value={value}
-        onChange={(e) =>
-          onChange(
-            type === "number"
-              ? Math.max(min, Math.min(max, parseFloat(e.target.value) || 0))
-              : e.target.value
-          )
-        }
+        onChange={(e) => {
+          const val = e.target.value;
+          const parsedValue = val === "" ? "" : parseFloat(val);
+          if (parsedValue >= min && parsedValue <= max) {
+            onChange(parsedValue);
+          }
+        }}
+        onBlur={(e) => {
+          const val = parseFloat(e.target.value);
+          if (isNaN(val) || val < min) {
+            onChange(min);
+          } else {
+            onChange(val);
+          }
+        }}
         className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
           errors[id] ? "border-red-500" : "border-gray-300"
         }`}
@@ -1309,8 +1388,10 @@ function App() {
               </h2>
               <p className="text-sm text-gray-600 mb-6">
                 Adjust the base costs for materials, hardware, and labor here.
-                All values are displayed in your selected currency, Indian
-                Rupees (₹).
+                All values are displayed in Indian Rupees (₹).
+                <span className="block mt-2 font-semibold text-indigo-700">
+                  Your custom rates are automatically saved.
+                </span>
               </p>
 
               {/* Labor & Markup */}
@@ -1326,17 +1407,33 @@ function App() {
                     Labor Hourly Rate ({CURRENCY_SYMBOLS[currency]}/hr)
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     id="laborHourlyRate"
-                    value={(laborHourlyRate * CURRENCY_RATES[currency]).toFixed(
-                      2
-                    )}
-                    onChange={(e) =>
-                      setLaborHourlyRate(
-                        Math.max(0, parseFloat(e.target.value) || 0) /
-                          CURRENCY_RATES[currency]
-                      )
+                    value={
+                      laborHourlyRate !== ""
+                        ? (laborHourlyRate * CURRENCY_RATES[currency]).toFixed(
+                            2
+                          )
+                        : ""
                     }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      // Handle the raw input value as a string for a better typing experience
+                      setLaborHourlyRate(
+                        val === ""
+                          ? ""
+                          : parseFloat(val) / CURRENCY_RATES[currency]
+                      );
+                    }}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      // On blur, commit the final parsed value to state
+                      setLaborHourlyRate(
+                        isNaN(val) || val < 0
+                          ? 0
+                          : val / CURRENCY_RATES[currency]
+                      );
+                    }}
                     className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                       errors.laborHourlyRate
                         ? "border-red-500"
@@ -1350,15 +1447,39 @@ function App() {
                     </p>
                   )}
                 </div>
-                {renderInputField(
-                  "markupPercentage",
-                  "Markup Percentage (%)",
-                  markupPercentage,
-                  setMarkupPercentage,
-                  "number",
-                  0,
-                  100
-                )}
+                <div className="div">
+                  <label
+                    htmlFor="markupPercentage"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Markup Percentage (%)
+                  </label>
+                  <input
+                    type="text"
+                    id="markupPercentage"
+                    value={markupPercentage !== "" ? markupPercentage : ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMarkupPercentage(val === "" ? "" : parseFloat(val));
+                    }}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setMarkupPercentage(isNaN(val) || val < 0 ? 0 : val);
+                    }}
+                    className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
+                      errors.markupPercentage
+                        ? "border-red-500"
+                        : "border-gray-300"
+                    }`}
+                    min="0"
+                    max="100"
+                  />
+                  {errors.markupPercentage && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.markupPercentage}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Main Materials */}
@@ -1382,17 +1503,33 @@ function App() {
                       ({CURRENCY_SYMBOLS[currency]}/sq. ft.)
                     </label>
                     <input
-                      type="number"
+                      type="text"
                       id={`material-${key}`}
-                      value={(value * CURRENCY_RATES[currency]).toFixed(2)}
-                      onChange={(e) =>
-                        setCustomMaterialCosts({
-                          ...customMaterialCosts,
-                          [key]:
-                            (parseFloat(e.target.value) || 0) /
-                            CURRENCY_RATES[currency],
-                        })
+                      value={
+                        value !== ""
+                          ? (value * CURRENCY_RATES[currency]).toFixed(2)
+                          : ""
                       }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomMaterialCosts((prev) => ({
+                          ...prev,
+                          [key]:
+                            val === ""
+                              ? ""
+                              : parseFloat(val) / CURRENCY_RATES[currency],
+                        }));
+                      }}
+                      onBlur={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setCustomMaterialCosts((prev) => ({
+                          ...prev,
+                          [key]:
+                            isNaN(val) || val < 0
+                              ? 0
+                              : val / CURRENCY_RATES[currency],
+                        }));
+                      }}
                       className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                         errors[`customMaterialCosts_${key}`]
                           ? "border-red-500"
@@ -1422,17 +1559,31 @@ function App() {
                     Edge Banding ({CURRENCY_SYMBOLS[currency]}/linear ft.)
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     id="customEdgeBandingCost"
-                    value={(
-                      customEdgeBandingCost * CURRENCY_RATES[currency]
-                    ).toFixed(2)}
-                    onChange={(e) =>
-                      setCustomEdgeBandingCost(
-                        Math.max(0, parseFloat(e.target.value) || 0) /
-                          CURRENCY_RATES[currency]
-                      )
+                    value={
+                      customEdgeBandingCost !== ""
+                        ? (
+                            customEdgeBandingCost * CURRENCY_RATES[currency]
+                          ).toFixed(2)
+                        : ""
                     }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomEdgeBandingCost(
+                        val === ""
+                          ? ""
+                          : parseFloat(val) / CURRENCY_RATES[currency]
+                      );
+                    }}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setCustomEdgeBandingCost(
+                        isNaN(val) || val < 0
+                          ? 0
+                          : val / CURRENCY_RATES[currency]
+                      );
+                    }}
                     className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                       errors.customEdgeBandingCost
                         ? "border-red-500"
@@ -1485,22 +1636,42 @@ function App() {
                               ({CURRENCY_SYMBOLS[currency]})
                             </label>
                             <input
-                              type="number"
+                              type="text"
                               id={`hardware-${typeKey}-${itemKey}`}
-                              value={(value * CURRENCY_RATES[currency]).toFixed(
-                                2
-                              )}
-                              onChange={(e) =>
+                              value={
+                                value !== ""
+                                  ? (value * CURRENCY_RATES[currency]).toFixed(
+                                      2
+                                    )
+                                  : ""
+                              }
+                              onChange={(e) => {
+                                const val = e.target.value;
                                 setCustomHardwareOptions((prev) => ({
                                   ...prev,
                                   [typeKey]: {
                                     ...prev[typeKey],
                                     [itemKey]:
-                                      (parseFloat(e.target.value) || 0) /
-                                      CURRENCY_RATES[currency],
+                                      val === ""
+                                        ? ""
+                                        : parseFloat(val) /
+                                          CURRENCY_RATES[currency],
                                   },
-                                }))
-                              }
+                                }));
+                              }}
+                              onBlur={(e) => {
+                                const val = parseFloat(e.target.value);
+                                setCustomHardwareOptions((prev) => ({
+                                  ...prev,
+                                  [typeKey]: {
+                                    ...prev[typeKey],
+                                    [itemKey]:
+                                      isNaN(val) || val < 0
+                                        ? 0
+                                        : val / CURRENCY_RATES[currency],
+                                  },
+                                }));
+                              }}
                               className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                                 errors[
                                   `customHardwareOptions_${typeKey}_${itemKey}`
@@ -1534,20 +1705,36 @@ function App() {
                     Hanging Rod ({CURRENCY_SYMBOLS[currency]})
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     id="customHardwareOptions_hanging_rod"
-                    value={(
-                      customHardwareOptions.hanging_rod *
-                      CURRENCY_RATES[currency]
-                    ).toFixed(2)}
-                    onChange={(e) =>
+                    value={
+                      customHardwareOptions.hanging_rod !== ""
+                        ? (
+                            customHardwareOptions.hanging_rod *
+                            CURRENCY_RATES[currency]
+                          ).toFixed(2)
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
                       setCustomHardwareOptions((prev) => ({
                         ...prev,
                         hanging_rod:
-                          (parseFloat(e.target.value) || 0) /
-                          CURRENCY_RATES[currency],
-                      }))
-                    }
+                          val === ""
+                            ? ""
+                            : parseFloat(val) / CURRENCY_RATES[currency],
+                      }));
+                    }}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setCustomHardwareOptions((prev) => ({
+                        ...prev,
+                        hanging_rod:
+                          isNaN(val) || val < 0
+                            ? 0
+                            : val / CURRENCY_RATES[currency],
+                      }));
+                    }}
                     className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                       errors.customHardwareOptions_hanging_rod
                         ? "border-red-500"
@@ -1588,17 +1775,33 @@ function App() {
                         ({CURRENCY_SYMBOLS[currency]}/sq. ft.)
                       </label>
                       <input
-                        type="number"
+                        type="text"
                         id={`finish-${key}`}
-                        value={(value * CURRENCY_RATES[currency]).toFixed(2)}
-                        onChange={(e) =>
-                          setCustomFinishCosts({
-                            ...customFinishCosts,
-                            [key]:
-                              (parseFloat(e.target.value) || 0) /
-                              CURRENCY_RATES[currency],
-                          })
+                        value={
+                          value !== ""
+                            ? (value * CURRENCY_RATES[currency]).toFixed(2)
+                            : ""
                         }
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomFinishCosts((prev) => ({
+                            ...prev,
+                            [key]:
+                              val === ""
+                                ? ""
+                                : parseFloat(val) / CURRENCY_RATES[currency],
+                          }));
+                        }}
+                        onBlur={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setCustomFinishCosts((prev) => ({
+                            ...prev,
+                            [key]:
+                              isNaN(val) || val < 0
+                                ? 0
+                                : val / CURRENCY_RATES[currency],
+                          }));
+                        }}
                         className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                           errors[`customFinishCosts_${key}`]
                             ? "border-red-500"
@@ -1628,17 +1831,31 @@ function App() {
                     Lighting ({CURRENCY_SYMBOLS[currency]}/linear ft.)
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     id="customLightingCostPerFt"
-                    value={(
-                      customLightingCostPerFt * CURRENCY_RATES[currency]
-                    ).toFixed(2)}
-                    onChange={(e) =>
-                      setCustomLightingCostPerFt(
-                        Math.max(0, parseFloat(e.target.value) || 0) /
-                          CURRENCY_RATES[currency]
-                      )
+                    value={
+                      customLightingCostPerFt !== ""
+                        ? (
+                            customLightingCostPerFt * CURRENCY_RATES[currency]
+                          ).toFixed(2)
+                        : ""
                     }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomLightingCostPerFt(
+                        val === ""
+                          ? ""
+                          : parseFloat(val) / CURRENCY_RATES[currency]
+                      );
+                    }}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setCustomLightingCostPerFt(
+                        isNaN(val) || val < 0
+                          ? 0
+                          : val / CURRENCY_RATES[currency]
+                      );
+                    }}
                     className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                       errors.customLightingCostPerFt
                         ? "border-red-500"
@@ -1661,17 +1878,31 @@ function App() {
                     /door)
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     id="customGlassDoorAddCost"
-                    value={(
-                      customGlassDoorAddCost * CURRENCY_RATES[currency]
-                    ).toFixed(2)}
-                    onChange={(e) =>
-                      setCustomGlassDoorAddCost(
-                        Math.max(0, parseFloat(e.target.value) || 0) /
-                          CURRENCY_RATES[currency]
-                      )
+                    value={
+                      customGlassDoorAddCost !== ""
+                        ? (
+                            customGlassDoorAddCost * CURRENCY_RATES[currency]
+                          ).toFixed(2)
+                        : ""
                     }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomGlassDoorAddCost(
+                        val === ""
+                          ? ""
+                          : parseFloat(val) / CURRENCY_RATES[currency]
+                      );
+                    }}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setCustomGlassDoorAddCost(
+                        isNaN(val) || val < 0
+                          ? 0
+                          : val / CURRENCY_RATES[currency]
+                      );
+                    }}
                     className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                       errors.customGlassDoorAddCost
                         ? "border-red-500"
@@ -1714,17 +1945,33 @@ function App() {
                           ({CURRENCY_SYMBOLS[currency]}/sq. ft.)
                         </label>
                         <input
-                          type="number"
+                          type="text"
                           id={`upholstery-${key}`}
-                          value={(value * CURRENCY_RATES[currency]).toFixed(2)}
-                          onChange={(e) =>
-                            setCustomSofaUpholsteryCosts({
-                              ...customSofaUpholsteryCosts,
-                              [key]:
-                                (parseFloat(e.target.value) || 0) /
-                                CURRENCY_RATES[currency],
-                            })
+                          value={
+                            value !== ""
+                              ? (value * CURRENCY_RATES[currency]).toFixed(2)
+                              : ""
                           }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCustomSofaUpholsteryCosts((prev) => ({
+                              ...prev,
+                              [key]:
+                                val === ""
+                                  ? ""
+                                  : parseFloat(val) / CURRENCY_RATES[currency],
+                            }));
+                          }}
+                          onBlur={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setCustomSofaUpholsteryCosts((prev) => ({
+                              ...prev,
+                              [key]:
+                                isNaN(val) || val < 0
+                                  ? 0
+                                  : val / CURRENCY_RATES[currency],
+                            }));
+                          }}
                           className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                             errors[`customSofaUpholsteryCosts_${key}`]
                               ? "border-red-500"
@@ -1750,17 +1997,31 @@ function App() {
                       Cushion Cost ({CURRENCY_SYMBOLS[currency]}/cushion)
                     </label>
                     <input
-                      type="number"
+                      type="text"
                       id="customSofaCushionCost"
-                      value={(
-                        customSofaCushionCost * CURRENCY_RATES[currency]
-                      ).toFixed(2)}
-                      onChange={(e) =>
-                        setCustomSofaCushionCost(
-                          Math.max(0, parseFloat(e.target.value) || 0) /
-                            CURRENCY_RATES[currency]
-                        )
+                      value={
+                        customSofaCushionCost !== ""
+                          ? (
+                              customSofaCushionCost * CURRENCY_RATES[currency]
+                            ).toFixed(2)
+                          : ""
                       }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomSofaCushionCost(
+                          val === ""
+                            ? ""
+                            : parseFloat(val) / CURRENCY_RATES[currency]
+                        );
+                      }}
+                      onBlur={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setCustomSofaCushionCost(
+                          isNaN(val) || val < 0
+                            ? 0
+                            : val / CURRENCY_RATES[currency]
+                        );
+                      }}
                       className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                         errors.customSofaCushionCost
                           ? "border-red-500"
@@ -1782,17 +2043,31 @@ function App() {
                       Leg Set Cost ({CURRENCY_SYMBOLS[currency]}/set)
                     </label>
                     <input
-                      type="number"
+                      type="text"
                       id="customSofaLegSetCost"
-                      value={(
-                        customSofaLegSetCost * CURRENCY_RATES[currency]
-                      ).toFixed(2)}
-                      onChange={(e) =>
-                        setCustomSofaLegSetCost(
-                          Math.max(0, parseFloat(e.target.value) || 0) /
-                            CURRENCY_RATES[currency]
-                        )
+                      value={
+                        customSofaLegSetCost !== ""
+                          ? (
+                              customSofaLegSetCost * CURRENCY_RATES[currency]
+                            ).toFixed(2)
+                          : ""
                       }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomSofaLegSetCost(
+                          val === ""
+                            ? ""
+                            : parseFloat(val) / CURRENCY_RATES[currency]
+                        );
+                      }}
+                      onBlur={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setCustomSofaLegSetCost(
+                          isNaN(val) || val < 0
+                            ? 0
+                            : val / CURRENCY_RATES[currency]
+                        );
+                      }}
                       className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                         errors.customSofaLegSetCost
                           ? "border-red-500"
@@ -1814,17 +2089,32 @@ function App() {
                       Arm Cost ({CURRENCY_SYMBOLS[currency]}/pair)
                     </label>
                     <input
-                      type="number"
+                      type="text"
                       id="customSofaArmCostPerPair"
-                      value={(
-                        customSofaArmCostPerPair * CURRENCY_RATES[currency]
-                      ).toFixed(2)}
-                      onChange={(e) =>
-                        setCustomSofaArmCostPerPair(
-                          Math.max(0, parseFloat(e.target.value) || 0) /
-                            CURRENCY_RATES[currency]
-                        )
+                      value={
+                        customSofaArmCostPerPair !== ""
+                          ? (
+                              customSofaArmCostPerPair *
+                              CURRENCY_RATES[currency]
+                            ).toFixed(2)
+                          : ""
                       }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomSofaArmCostPerPair(
+                          val === ""
+                            ? ""
+                            : parseFloat(val) / CURRENCY_RATES[currency]
+                        );
+                      }}
+                      onBlur={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setCustomSofaArmCostPerPair(
+                          isNaN(val) || val < 0
+                            ? 0
+                            : val / CURRENCY_RATES[currency]
+                        );
+                      }}
                       className={`w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition duration-200 ${
                         errors.customSofaArmCostPerPair
                           ? "border-red-500"
